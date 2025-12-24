@@ -7,6 +7,17 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+FEATURE_NAMES = [
+    "bps_in",
+    "bps_out",
+    "pps_in",
+    "pps_out",
+    "err_in",
+    "err_out",
+    "drop_in",
+    "drop_out",
+]
+
 @dataclass
 class ScoreResult:
     score: float
@@ -82,6 +93,20 @@ class Detector:
         score = float(-self.model.decision_function(Xs)[0])
         is_anomaly = score > self.threshold
         return ScoreResult(score=score, is_anomaly=is_anomaly, threshold=self.threshold, model_ready=True)
+    
+    def explain(self, features: np.ndarray, top_k: int = 2) -> list[str]:
+        if self.scaler is None:
+            return []
+        scale = np.where(self.scaler.scale_ == 0, 1.0, self.scaler.scale_)
+        z_scores = np.abs((features - self.scaler.mean_) / scale)
+        order = np.argsort(z_scores)[::-1]
+        picks = []
+        for idx in order[:top_k]:
+            name = FEATURE_NAMES[int(idx)]
+            value = z_scores[int(idx)]
+            picks.append(f"{name} (z={value:.2f})")
+        return picks
+
 
 def to_feature_vector(payload: Dict[str, Any]) -> np.ndarray:
     '''
@@ -90,5 +115,4 @@ def to_feature_vector(payload: Dict[str, Any]) -> np.ndarray:
     - pps_in, pps_out
     - err_in/out, drop_in/out
     '''
-    keys = ["bps_in","bps_out","pps_in","pps_out","err_in","err_out","drop_in","drop_out"]
-    return np.array([float(payload.get(k, 0.0)) for k in keys], dtype=np.float32)
+    return np.array([float(payload.get(k, 0.0)) for k in FEATURE_NAMES], dtype=np.float32)

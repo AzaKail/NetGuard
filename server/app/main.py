@@ -82,14 +82,19 @@ def ingest(item: MetricIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(m)
 
+    explanation = []
+    if score_res.model_ready:
+        explanation = detector.explain(features)
+
     if score_res.model_ready and score_res.is_anomaly:
+        reason = "аномалия: " + ", ".join(explanation) if explanation else "аномалия: высокий anomaly_score"
         a = Alert(
             host=item.host,
             iface=item.iface,
             ts=ts,
             score=score_res.score,
             threshold=score_res.threshold,
-            reason="anomaly_score выше порога",
+            reason=reason,
         )
         db.add(a)
         db.commit()
@@ -101,6 +106,7 @@ def ingest(item: MetricIn, db: Session = Depends(get_db)):
         "anomaly_score": score_res.score,
         "threshold": score_res.threshold,
         "is_anomaly": score_res.is_anomaly,
+        "explanation": explanation,
     }
 
 @app.get("/api/metrics")
