@@ -13,6 +13,11 @@
 
 ## Быстрый старт (Windows / Linux)
 
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python --version
+(PY 3.11 на нём делаю)
+
 ### 1) Сервер
 ```bash
 cd server
@@ -22,7 +27,11 @@ python -m venv .venv
 
 
 pip install -r requirements.txt
+python -m pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
 ```
 
 Открой в браузере: http://127.0.0.1:8000
@@ -54,3 +63,9 @@ python agent.py --server http://127.0.0.1:8000 --interval 5 --simulate
 - windows 1/5/15 минут на сервере
 - объяснимость (top-features, вклад по реконструкционной ошибке для AE)
 - RBAC и уведомления (Telegram/email)
+
+
+
+git add .
+git commit -m "УгаБуга"
+git push
