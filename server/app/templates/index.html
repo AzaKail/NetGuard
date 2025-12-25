@@ -78,7 +78,9 @@
             <td>{{ "%.0f"|format(m.pps_out) }}</td>
             <td>{{ "%.4f"|format(m.anomaly_score) }}</td>
             <td>
-              {% if m.is_anomaly %}
+              {% if m.is_anomaly == 2 %}
+                <span class="pill bad">ручная аномалия</span>
+              {% elif m.is_anomaly %}
                 <span class="pill bad">аномалия</span>
               {% else %}
                 <span class="pill ok">норма</span>

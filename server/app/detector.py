@@ -108,6 +108,7 @@ class Detector:
         return picks
 
 
+
 def to_feature_vector(payload: Dict[str, Any]) -> np.ndarray:
     '''
     Признаки (таблично, без payload пакетов):

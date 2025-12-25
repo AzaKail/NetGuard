@@ -63,13 +63,17 @@ def main():
     ap.add_argument("--iface", default=None, help="Network interface name (default: auto-pick)")
     ap.add_argument("--host", default=None, help="Host label (default: hostname)")
     ap.add_argument("--simulate", action="store_true", help="Generate synthetic spikes to see anomalies")
+    ap.add_argument("--force-anomaly", action="store_true", help="Force manual anomaly flag for demo")
     args = ap.parse_args()
 
     iface = args.iface or pick_iface()
     host = args.host or socket.gethostname()
     url = args.server.rstrip("/") + "/ingest"
 
-    print(f"[agent] host={host} iface={iface} interval={args.interval}s server={url} simulate={args.simulate}")
+    print(
+        f"[agent] host={host} iface={iface} interval={args.interval}s server={url} "
+        f"simulate={args.simulate} manual_anomaly={args.force_anomaly}"
+    )
 
     prev = read_iface(iface)
     prev_t = time.time()
@@ -87,6 +91,7 @@ def main():
             "iface": iface,
             "ts": datetime.now(timezone.utc).isoformat(),
             "interval_s": float(args.interval),
+            "manual_anomaly": bool(args.force_anomaly),
             **rates
         }
 

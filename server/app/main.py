@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from datetime import datetime, timezone
+import math
 from typing import Optional
 
 from fastapi import FastAPI, Depends, Request
@@ -33,6 +35,7 @@ class MetricIn(BaseModel):
     iface: str = Field(default="unknown", max_length=128)
     ts: Optional[datetime] = None
     interval_s: float = 5.0
+    manual_anomaly: bool = False
 
     bps_in: float = 0.0
     bps_out: float = 0.0
@@ -62,6 +65,10 @@ def ingest(item: MetricIn, db: Session = Depends(get_db)):
     features = to_feature_vector(payload)
     score_res = detector.add_and_score(features)
 
+    is_anomaly_value = 1 if score_res.is_anomaly else 0
+    if item.manual_anomaly:
+        is_anomaly_value = 2
+
     m = Metric(
         host=item.host,
         iface=item.iface,
@@ -76,7 +83,7 @@ def ingest(item: MetricIn, db: Session = Depends(get_db)):
         drop_in=item.drop_in,
         drop_out=item.drop_out,
         anomaly_score=score_res.score,
-        is_anomaly=1 if score_res.is_anomaly else 0,
+        is_anomaly=is_anomaly_value,
     )
     db.add(m)
     db.commit()
@@ -86,14 +93,20 @@ def ingest(item: MetricIn, db: Session = Depends(get_db)):
     if score_res.model_ready:
         explanation = detector.explain(features)
 
-    if score_res.model_ready and score_res.is_anomaly:
+    threshold_value = score_res.threshold if math.isfinite(score_res.threshold) else 0.0
+
+    if item.manual_anomaly:
+        reason = "аномалия: включён ручной режим"
+    else:
         reason = "аномалия: " + ", ".join(explanation) if explanation else "аномалия: высокий anomaly_score"
+
+    if (score_res.model_ready and score_res.is_anomaly) or item.manual_anomaly:
         a = Alert(
             host=item.host,
             iface=item.iface,
             ts=ts,
             score=score_res.score,
-            threshold=score_res.threshold,
+            threshold=threshold_value,
             reason=reason,
         )
         db.add(a)
@@ -104,8 +117,9 @@ def ingest(item: MetricIn, db: Session = Depends(get_db)):
         "id": m.id,
         "model_ready": score_res.model_ready,
         "anomaly_score": score_res.score,
-        "threshold": score_res.threshold,
-        "is_anomaly": score_res.is_anomaly,
+        "threshold": threshold_value if math.isfinite(score_res.threshold) else None,
+        "is_anomaly": is_anomaly_value != 0,
+        "anomaly_source": "manual" if is_anomaly_value == 2 else "model",
         "explanation": explanation,
     }
 
@@ -124,6 +138,7 @@ def api_metrics(limit: int = 50, db: Session = Depends(get_db)):
         "pps_out": r.pps_out,
         "score": r.anomaly_score,
         "is_anomaly": bool(r.is_anomaly),
+        "anomaly_source": "manual" if r.is_anomaly == 2 else "model",
     } for r in rows]
 
 @app.get("/api/alerts")
