@@ -4,99 +4,313 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>NetGuard.AI MVP</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-    h1 { margin: 0 0 10px; }
-    .muted { color: #666; }
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --line: #dbe2ea;
+      --text: #17202a;
+      --muted: #64748b;
+      --green: #157347;
+      --red: #b42318;
+      --blue: #1769aa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      padding: 22px 28px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    h1, h2 { margin: 0; letter-spacing: 0; }
+    h1 { font-size: 26px; }
+    h2 { font-size: 17px; }
+    main { padding: 20px 28px 32px; }
+    .muted { color: var(--muted); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .stat, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .stat { padding: 14px; min-height: 86px; }
+    .stat .label { color: var(--muted); font-size: 13px; }
+    .stat .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin: 0 0 18px;
+    }
+    button, .link-button {
+      border: 1px solid #b7c4d4;
+      border-radius: 6px;
+      background: #fff;
+      color: #17202a;
+      padding: 9px 12px;
+      font: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      min-height: 38px;
+    }
+    button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+    button.warn { background: #fff5f2; border-color: #f4b4a8; color: var(--red); }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .panel { padding: 14px; overflow: hidden; }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .chart-wrap { height: 300px; }
     table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 13px; }
-    th { background: #f5f5f5; text-align: left; }
-    .pill { padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; display: inline-block; }
-    .ok { background: #e7f7ea; color: #136b2a; }
-    .bad { background: #fde8e8; color: #9b1c1c; }
-    .grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
-    @media (min-width: 1000px) { .grid { grid-template-columns: 1fr 1fr; } }
-    .card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 14px; }
-    .top { display:flex; justify-content:space-between; align-items:flex-end; gap: 12px; }
-    code { background: #f7f7f7; padding: 2px 4px; border-radius: 6px; }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 9px;
+      font-size: 13px;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+    th { color: #334155; background: #f8fafc; font-weight: 650; }
+    td.reason { white-space: normal; min-width: 220px; }
+    .pill {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 12px;
+      display: inline-block;
+    }
+    .ok { background: #e8f7ee; color: var(--green); }
+    .bad { background: #fdecec; color: var(--red); }
+    .train { background: #eef4ff; color: var(--blue); }
+    .section-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    @media (max-width: 1050px) {
+      .stats { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+      .layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 650px) {
+      header { align-items: flex-start; flex-direction: column; padding: 18px; }
+      main { padding: 16px; }
+      .stats { grid-template-columns: 1fr; }
+      .panel { overflow-x: auto; }
+      .chart-wrap { min-width: 560px; }
+    }
   </style>
 </head>
 <body>
-  <div class="top">
+  <header>
     <div>
-      <h1>NetGuard.AI — MVP</h1>
-      <div class="muted">FastAPI • Isolation Forest • только агрегированные метрики (без payload)</div>
+      <h1>NetGuard.AI MVP</h1>
+      <div class="muted">FastAPI, SQLite, Isolation Forest, агент сетевых метрик</div>
     </div>
     <div class="muted">UTC: {{ now.isoformat() }}</div>
-  </div>
+  </header>
 
-  <div class="grid" style="margin-top:16px;">
-    <div class="card">
-      <h2 style="margin:0 0 10px;">Алёрты (последние 20)</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th><th>Время</th><th>Хост</th><th>Интерфейс</th><th>Score</th><th>Порог</th><th>Причина</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for a in alerts %}
-          <tr>
-            <td>{{ a.id }}</td>
-            <td>{{ a.ts.isoformat() }}</td>
-            <td>{{ a.host }}</td>
-            <td>{{ a.iface }}</td>
-            <td>{{ "%.4f"|format(a.score) }}</td>
-            <td>{{ "%.4f"|format(a.threshold) }}</td>
-            <td>{{ a.reason }}</td>
-          </tr>
-          {% endfor %}
-          {% if alerts|length == 0 %}
-          <tr><td colspan="7" class="muted">Пока нет алёртов. Запусти агент или режим <code>--simulate</code>.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="card">
-      <h2 style="margin:0 0 10px;">Метрики (последние 50)</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th><th>Время</th><th>Хост</th><th>bps_in</th><th>bps_out</th><th>pps_in</th><th>pps_out</th><th>Score</th><th>Статус</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for m in metrics %}
-          <tr>
-            <td>{{ m.id }}</td>
-            <td>{{ m.ts.isoformat() }}</td>
-            <td>{{ m.host }} / {{ m.iface }}</td>
-            <td>{{ "%.0f"|format(m.bps_in) }}</td>
-            <td>{{ "%.0f"|format(m.bps_out) }}</td>
-            <td>{{ "%.0f"|format(m.pps_in) }}</td>
-            <td>{{ "%.0f"|format(m.pps_out) }}</td>
-            <td>{{ "%.4f"|format(m.anomaly_score) }}</td>
-            <td>
-              {% if m.is_anomaly == 2 %}
-                <span class="pill bad">ручная аномалия</span>
-              {% elif m.is_anomaly %}
-                <span class="pill bad">аномалия</span>
-              {% else %}
-                <span class="pill ok">норма</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-          {% if metrics|length == 0 %}
-          <tr><td colspan="9" class="muted">Пока нет данных. Агент ещё не отправлял метрики.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
-      <div class="muted" style="margin-top:10px;">
-        API: <code>/api/metrics</code> и <code>/api/alerts</code>
+  <main>
+    <section class="stats">
+      <div class="stat">
+        <div class="label">Всего метрик</div>
+        <div class="value">{{ status.total_metrics }}</div>
       </div>
+      <div class="stat">
+        <div class="label">Обнаружено аномалий</div>
+        <div class="value">{{ status.total_alerts }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Активных хостов</div>
+        <div class="value">{{ status.active_hosts }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Статус ML-модели</div>
+        <div class="value">
+          {% if status.model_status == "Ready" %}
+            <span class="pill ok">Ready</span>
+          {% else %}
+            <span class="pill train">Training</span>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <div class="toolbar">
+      <button class="primary" onclick="simulate('inbound')">Симулировать входящий всплеск</button>
+      <button class="primary" onclick="simulate('outbound')">Симулировать исходящий всплеск</button>
+      <button class="warn" onclick="simulate('errors')">Симулировать ошибки</button>
+      <a class="link-button" href="/api/export/metrics.csv">Экспорт метрик CSV</a>
+      <a class="link-button" href="/api/export/alerts.csv">Экспорт аномалий CSV</a>
+      <span class="muted">Последняя запись: {{ status.last_metric_ts or "нет данных" }}</span>
     </div>
-  </div>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Входящий и исходящий трафик</h2>
+          <span class="muted">байт/сек</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="trafficChart"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Компьютеры</h2>
+          <span class="muted">{{ hosts|length }}</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Hostname</th><th>Метрик</th><th>Последняя запись</th></tr>
+          </thead>
+          <tbody>
+            {% for host, last_seen, metric_count in hosts %}
+            <tr>
+              <td>{{ host }}</td>
+              <td>{{ metric_count }}</td>
+              <td>{{ last_seen.isoformat() }}</td>
+            </tr>
+            {% endfor %}
+            {% if hosts|length == 0 %}
+            <tr><td colspan="3" class="muted">Нет подключенных агентов</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section-grid">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Последние метрики</h2>
+          <span class="muted">50 записей</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Время</th><th>Хост</th><th>bps_in</th><th>bps_out</th><th>pps_in</th><th>pps_out</th><th>err/drop</th><th>Score</th><th>Статус</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in metrics %}
+            <tr>
+              <td>{{ m.id }}</td>
+              <td>{{ m.ts.isoformat() }}</td>
+              <td>{{ m.host }} / {{ m.iface }}</td>
+              <td>{{ "%.0f"|format(m.bps_in) }}</td>
+              <td>{{ "%.0f"|format(m.bps_out) }}</td>
+              <td>{{ "%.0f"|format(m.pps_in) }}</td>
+              <td>{{ "%.0f"|format(m.pps_out) }}</td>
+              <td>{{ "%.0f"|format(m.err_in + m.err_out) }} / {{ "%.0f"|format(m.drop_in + m.drop_out) }}</td>
+              <td>{{ "%.4f"|format(m.anomaly_score) }}</td>
+              <td>
+                {% if m.is_anomaly == 2 %}
+                  <span class="pill bad">симуляция</span>
+                {% elif m.is_anomaly %}
+                  <span class="pill bad">аномалия</span>
+                {% else %}
+                  <span class="pill ok">норма</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+            {% if metrics|length == 0 %}
+            <tr><td colspan="10" class="muted">Данных пока нет</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Последние аномалии</h2>
+          <span class="muted">20 записей</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Время</th><th>Хост</th><th>Score</th><th>Порог</th><th>Причина</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in alerts %}
+            <tr>
+              <td>{{ a.id }}</td>
+              <td>{{ a.ts.isoformat() }}</td>
+              <td>{{ a.host }} / {{ a.iface }}</td>
+              <td>{{ "%.4f"|format(a.score) }}</td>
+              <td>{{ "%.4f"|format(a.threshold) }}</td>
+              <td class="reason">{{ a.reason }}</td>
+            </tr>
+            {% endfor %}
+            {% if alerts|length == 0 %}
+            <tr><td colspan="6" class="muted">Аномалий пока нет</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const labels = {{ chart_labels | tojson }};
+    const bpsIn = {{ chart_bps_in | tojson }};
+    const bpsOut = {{ chart_bps_out | tojson }};
+
+    new Chart(document.getElementById("trafficChart"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "bps_in", data: bpsIn, borderColor: "#1769aa", backgroundColor: "rgba(23,105,170,.12)", tension: .25 },
+          { label: "bps_out", data: bpsOut, borderColor: "#d97706", backgroundColor: "rgba(217,119,6,.12)", tension: .25 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: "index" },
+        plugins: { legend: { position: "bottom" } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+
+    async function simulate(kind) {
+      const response = await fetch(`/api/simulate/${kind}`, { method: "POST" });
+      if (!response.ok) {
+        alert("Ошибка симуляции");
+        return;
+      }
+      window.location.reload();
+    }
+  </script>
 </body>
 </html>

@@ -1,71 +1,150 @@
-# NetGuard.AI — MVP (с нуля)
+# NetGuard.AI MVP
 
-Это **минимальный рабочий прототип**: агент собирает **агрегированные сетевые метрики** (без содержимого пакетов) и отправляет их на сервер. Сервер сохраняет метрики, считает anomaly score (Isolation Forest) и показывает алёрты в веб-панели.
+NetGuard.AI MVP - учебный прототип системы мониторинга сетевой активности в локальной сети.
 
-> Проект разработан в рамках магистерской диссертации по направлению «Информационные системы и технологии».
+Схема работы:
 
-## Что внутри
-- `agent/agent.py` — лёгкий агент (Python + psutil), отправляет JSON в FastAPI.
-- `server/app/main.py` — FastAPI ingest + простая веб-панель.
-- `server/app/detector.py` — буфер, скейлер + IsolationForest, авто-переобучение.
-- `server/app/db.py`, `server/app/models.py` — SQLite база (простая).
-- `server/app/templates/index.html` — HTML панель (таблица метрик + алёрты).
-
-## Быстрый старт (Windows / Linux)
-
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python --version
-(PY 3.11 на нём делаю)
-
-### 1) Сервер
-```bash
-cd server
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-
-
-pip install -r requirements.txt
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
+```text
+Рабочий ПК -> agent.exe / agent.py -> FastAPI сервер администратора -> SQLite -> веб-панель
 ```
 
-Открой в браузере: http://127.0.0.1:8000
+Агент собирает агрегированные сетевые метрики без анализа содержимого пакетов, отправляет их на сервер, сервер сохраняет данные, рассчитывает `anomaly_score` через Isolation Forest и формирует alert при нетипичном поведении.
 
-### 2) Агент
-В новом терминале:
-```bash
+## Возможности
+
+- сбор метрик `bps_in`, `bps_out`, `pps_in`, `pps_out`, `err_in`, `err_out`, `drop_in`, `drop_out`;
+- передача метрик на FastAPI-сервер;
+- хранение данных в SQLite в таблицах `metrics` и `alerts`;
+- веб-панель администратора со статистикой, графиком, таблицей метрик и таблицей аномалий;
+- статус модели: `Training` или `Ready`;
+- кнопки симуляции входящего всплеска, исходящего всплеска и ошибок;
+- экспорт `/api/export/metrics.csv` и `/api/export/alerts.csv`;
+- сборка агента в `.exe` через PyInstaller.
+
+## Быстрый запуск через Docker
+
+Нужен установленный Docker Desktop.
+
+Из корня проекта:
+
+```powershell
+docker compose up --build server
+```
+
+Панель администратора:
+
+```text
+http://127.0.0.1:8000
+```
+
+Остановить сервер:
+
+```powershell
+docker compose down
+```
+
+Данные SQLite сохраняются в Docker volume `netguard-data`, поэтому не пропадают после перезапуска контейнера.
+
+### Запуск с демо-агентом
+
+Чтобы сразу увидеть поступающие метрики и симуляцию всплесков:
+
+```powershell
+docker compose --profile demo up --build
+```
+
+Важно: агент внутри Docker видит сетевые счетчики контейнера, а не настоящей сетевой карты Windows. Для реального мониторинга рабочих ПК запускайте `agent.py` или `agent.exe` локально на каждом ПК.
+
+## Локальный запуск без Docker
+
+### Сервер
+
+```powershell
+cd server
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Панель администратора:
+
+```text
+http://127.0.0.1:8000
+```
+
+Если сервер должен принимать данные из локальной сети, на рабочих ПК указывается IP компьютера администратора, например:
+
+```text
+http://192.168.1.10:8000
+```
+
+### Агент
+
+В другом терминале:
+
+```powershell
 cd agent
 python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python agent.py --server http://127.0.0.1:8000 --interval 5
 ```
 
-### Демо-режим (чтобы точно увидел аномалии)
-```bash
-python agent.py --server http://127.0.0.1:8000 --interval 5 --simulate
+Запуск агента с отправкой на компьютер администратора:
+
+```powershell
+python agent.py --server http://192.168.1.10:8000 --interval 5
 ```
-В `--simulate` агент периодически "подкручивает" метрики, чтобы появились алёрты.
+
+Демо-режим агента:
+
+```powershell
+python agent.py --server http://127.0.0.1:8000 --interval 1 --simulate
+```
+
+## Сборка agent.exe
+
+```powershell
+cd agent
+.\.venv\Scripts\Activate.ps1
+python -m pip install pyinstaller
+pyinstaller --onefile --name agent agent.py
+```
+
+Готовый файл будет создан здесь:
+
+```text
+agent\dist\agent.exe
+```
+
+Запуск:
+
+```powershell
+agent.exe --server http://192.168.1.10:8000 --interval 5
+```
 
 ## API
-- `POST /ingest` — принять метрику
-- `GET /api/metrics?limit=50`
-- `GET /api/alerts?limit=20`
 
-## Что можно улучшать дальше (следующий шаг)
-- хранение в Postgres/TimescaleDB
-- windows 1/5/15 минут на сервере
-- объяснимость (top-features, вклад по реконструкционной ошибке для AE)
-- RBAC и уведомления (Telegram/email)
+- `POST /ingest` - прием метрик от агента;
+- `GET /api/status` - общая статистика;
+- `GET /api/metrics?limit=50` - последние метрики;
+- `GET /api/alerts?limit=20` - последние аномалии;
+- `GET /api/hosts` - список известных хостов;
+- `POST /api/simulate/inbound` - симуляция входящего всплеска;
+- `POST /api/simulate/outbound` - симуляция исходящего всплеска;
+- `POST /api/simulate/errors` - симуляция ошибок и потерь;
+- `GET /api/export/metrics.csv` - экспорт метрик;
+- `GET /api/export/alerts.csv` - экспорт alert.
 
+## Что сказать на защите
 
+В системе используется клиент-серверная архитектура. На рабочих станциях запускается легкий агент сбора данных, а на компьютере администратора размещается серверная часть с веб-интерфейсом. Для обнаружения аномалий применяется Isolation Forest - алгоритм машинного обучения без учителя. Это удобно на начальном этапе, потому что нет заранее размеченной базы нормальных и вредоносных событий.
 
-git add .
-git commit -m "УгаБуга"
-git push
+Для проверки работоспособности реализован режим имитации аномальной сетевой активности. Он позволяет показать реакцию алгоритма без необходимости специально создавать реальную сетевую проблему.
+
+## Важное ограничение
+
+Центральный сервер не может надежно собрать локальные счетчики сетевой карты с других ПК только потому, что они подключены к одной LAN. Для метрик `bytes`, `packets`, `errors`, `drops` нужен агент на каждом контролируемом ПК или доступ к сетевому оборудованию через SNMP/NetFlow. Поэтому практичный вариант для защиты - собрать `agent.exe` и запускать его на рабочих станциях без установки Python.
+
+Функция наподобие AnyDesk - это отдельный большой модуль удаленного доступа: экран, ввод, NAT traversal, шифрование, права доступа. В текущем MVP лучше оставить это как направление развития, а не смешивать с системой мониторинга.

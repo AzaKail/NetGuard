@@ -53,6 +53,10 @@ class Detector:
         self.threshold: float = float("inf")
         self._seen: int = 0
 
+    @property
+    def is_ready(self) -> bool:
+        return self.model is not None and self.scaler is not None
+
     def _fit(self) -> None:
         X = np.vstack(list(self.buffer))
         scaler = StandardScaler()

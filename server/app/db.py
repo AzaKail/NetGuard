@@ -1,8 +1,11 @@
 from __future__ import annotations
+
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-DB_URL = "sqlite:///./netguard.db"
+DB_URL = os.getenv("NETGUARD_DB_URL", "sqlite:///./netguard.db")
 
 engine = create_engine(
     DB_URL,

@@ -1,7 +1,18 @@
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.spec
+
+# Local data
+*.db
+server/data/
 
 # Node / Frontend
 node_modules/

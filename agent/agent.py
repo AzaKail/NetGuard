@@ -1,12 +1,32 @@
 from __future__ import annotations
 import argparse
+import configparser
+import os
 import socket
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Dict
 
 import psutil
 import requests
+
+
+def app_dir() -> str:
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def load_config() -> dict[str, str]:
+    config_path = os.path.join(app_dir(), "agent_config.ini")
+    parser = configparser.ConfigParser()
+    if os.path.exists(config_path):
+        parser.read(config_path, encoding="utf-8")
+    if "agent" not in parser:
+        return {}
+    return {key: value for key, value in parser["agent"].items()}
+
 
 def pick_iface() -> str:
     pernic = psutil.net_io_counters(pernic=True)
@@ -57,11 +77,21 @@ def to_rates(prev, cur, dt: float, simulate: bool, tick: int) -> Dict[str, float
     }
 
 def main():
+    config = load_config()
     ap = argparse.ArgumentParser(description="NetGuard.AI MVP agent (aggregated network metrics)")
-    ap.add_argument("--server", required=True, help="Server URL, e.g. http://127.0.0.1:8000")
-    ap.add_argument("--interval", type=float, default=5.0, help="Seconds between sends (default 5)")
-    ap.add_argument("--iface", default=None, help="Network interface name (default: auto-pick)")
-    ap.add_argument("--host", default=None, help="Host label (default: hostname)")
+    ap.add_argument(
+        "--server",
+        default=os.getenv("NETGUARD_SERVER") or config.get("server") or "http://127.0.0.1:8000",
+        help="Server URL, e.g. http://127.0.0.1:8000",
+    )
+    ap.add_argument(
+        "--interval",
+        type=float,
+        default=float(config.get("interval", 5.0)),
+        help="Seconds between sends (default 5)",
+    )
+    ap.add_argument("--iface", default=config.get("iface") or None, help="Network interface name (default: auto-pick)")
+    ap.add_argument("--host", default=config.get("host") or None, help="Host label (default: hostname)")
     ap.add_argument("--simulate", action="store_true", help="Generate synthetic spikes to see anomalies")
     ap.add_argument("--force-anomaly", action="store_true", help="Force manual anomaly flag for demo")
     args = ap.parse_args()
