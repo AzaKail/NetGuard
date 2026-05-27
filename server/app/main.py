@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import csv
 import io
 import math
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Depends, Request, HTTPException
@@ -21,7 +22,7 @@ from .detector import Detector, to_feature_vector
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="NetGuard.AI MVP", version="0.2.0")
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 
 detector = Detector()
 

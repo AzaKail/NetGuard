@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>NetGuard.AI MVP</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -87,6 +86,7 @@
       margin-bottom: 12px;
     }
     .chart-wrap { height: 300px; }
+    .chart-wrap canvas { width: 100%; height: 100%; display: block; }
     table { border-collapse: collapse; width: 100%; }
     th, td {
       border-bottom: 1px solid var(--line);
@@ -285,23 +285,77 @@
     const bpsIn = {{ chart_bps_in | tojson }};
     const bpsOut = {{ chart_bps_out | tojson }};
 
-    new Chart(document.getElementById("trafficChart"), {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: "bps_in", data: bpsIn, borderColor: "#1769aa", backgroundColor: "rgba(23,105,170,.12)", tension: .25 },
-          { label: "bps_out", data: bpsOut, borderColor: "#d97706", backgroundColor: "rgba(217,119,6,.12)", tension: .25 }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { intersect: false, mode: "index" },
-        plugins: { legend: { position: "bottom" } },
-        scales: { y: { beginAtZero: true } }
+    function drawTrafficChart() {
+      const canvas = document.getElementById("trafficChart");
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+
+      const ctx = canvas.getContext("2d");
+      ctx.scale(ratio, ratio);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      const pad = { left: 54, right: 16, top: 18, bottom: 38 };
+      const width = rect.width - pad.left - pad.right;
+      const height = rect.height - pad.top - pad.bottom;
+      const all = bpsIn.concat(bpsOut);
+      const maxValue = Math.max(1, ...all);
+
+      ctx.strokeStyle = "#dbe2ea";
+      ctx.lineWidth = 1;
+      ctx.font = "12px system-ui, sans-serif";
+      ctx.fillStyle = "#64748b";
+
+      for (let i = 0; i <= 4; i += 1) {
+        const y = pad.top + (height * i / 4);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + width, y);
+        ctx.stroke();
+        const value = Math.round(maxValue * (1 - i / 4));
+        ctx.fillText(value.toLocaleString("ru-RU"), 8, y + 4);
       }
-    });
+
+      function point(value, index, count) {
+        const x = pad.left + (count <= 1 ? 0 : width * index / (count - 1));
+        const y = pad.top + height - (value / maxValue) * height;
+        return [x, y];
+      }
+
+      function drawLine(values, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        values.forEach((value, index) => {
+          const [x, y] = point(value, index, values.length);
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      if (bpsIn.length > 0) drawLine(bpsIn, "#1769aa");
+      if (bpsOut.length > 0) drawLine(bpsOut, "#d97706");
+
+      ctx.fillStyle = "#1769aa";
+      ctx.fillRect(pad.left, rect.height - 20, 12, 3);
+      ctx.fillStyle = "#17202a";
+      ctx.fillText("bps_in", pad.left + 18, rect.height - 16);
+      ctx.fillStyle = "#d97706";
+      ctx.fillRect(pad.left + 88, rect.height - 20, 12, 3);
+      ctx.fillStyle = "#17202a";
+      ctx.fillText("bps_out", pad.left + 106, rect.height - 16);
+
+      if (labels.length > 0) {
+        ctx.fillStyle = "#64748b";
+        ctx.fillText(labels[0], pad.left, rect.height - 4);
+        ctx.fillText(labels[labels.length - 1], Math.max(pad.left, rect.width - pad.right - 64), rect.height - 4);
+      }
+    }
+
+    drawTrafficChart();
+    window.addEventListener("resize", drawTrafficChart);
 
     async function simulate(kind) {
       const response = await fetch(`/api/simulate/${kind}`, { method: "POST" });
