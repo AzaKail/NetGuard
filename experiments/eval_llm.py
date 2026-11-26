@@ -86,7 +86,7 @@ def numbers(s):
 
 
 def fabricated(text, ctx):
-    src = [abs(v) for _, v in numbers(json.dumps(ctx, ensure_ascii=False))]
+    src = [abs(v) for _, v in numbers(json.dumps(L.add_derived(ctx), ensure_ascii=False))]
     src += [s / 1e3 for s in src] + [s / 1e6 for s in src]  # КБ/МБ conversions
     body = re.sub(r"^\s*\d+\.\s", "", text, flags=re.M)  # list numbering
     for raw, val in numbers(body):

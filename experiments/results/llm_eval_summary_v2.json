@@ -1,0 +1,13 @@
+[
+ {
+  "model": "netguard-analyst",
+  "class_acc": 0.5,
+  "fabricated": 0.05,
+  "latency_med_s": 5.5,
+  "acc_flood": 1.0,
+  "acc_scan": 0.0,
+  "acc_exfil": 0.0,
+  "acc_channel": 1.0,
+  "acc_benign": 0.5
+ }
+]

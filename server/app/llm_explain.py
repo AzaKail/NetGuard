@@ -34,7 +34,13 @@ SYSTEM = (
     "(исходящий всплеск), проблема канала или драйвера (ошибки/сбросы), легитимная "
     "нагрузка (обновление, бэкап), недостаточно данных] и объясни почему.\n"
     "3. Что проверить администратору (2-4 пункта).\n"
-    "Отличай флуд от сканирования по байтам на пакет (bps/pps): при флуде вместе с пакетами растёт и объём в байтах, при сканировании пакетов много, а байт на пакет мало (меньше ~150). "
+    "В блоке derived уже посчитаны производные признаки: байты на пакет сейчас и в норме, "
+    "во сколько раз выросли пакеты и байты, направление всплеска. Опирайся на них: "
+    "флуд - пакеты и байты растут вместе, байт на пакет примерно как в норме или больше; "
+    "сканирование - пакеты растут во много раз сильнее байт, байт на пакет мало (меньше ~150); "
+    "утечка - растёт в основном исходящий объём (bytes_ratio_out); "
+    "проблема канала - есть ошибки или сбросы без роста трафика; "
+    "легитимная нагрузка - все отношения меньше ~2. "
     "Используй только числа из данных. Если данных мало, так и скажи. Не придумывай "
     "IP-адреса, процессы и порты, которых нет в данных."
 )
@@ -66,8 +72,30 @@ def build_context(alert, window: list, baseline: list) -> dict:
     }
 
 
+def add_derived(ctx: dict) -> dict:
+    """Pre-compute the ratios a small LLM cannot reliably compute itself."""
+    base = {f: v[0] for f, v in ctx.get("baseline_mean_std", {}).items()}
+    now = ctx.get("value_at_alert", {})
+    if not base or not now:
+        return ctx
+    def div(a, b):
+        return round(a / b, 1) if b > 1e-9 else None
+    d = {}
+    for side in ("in", "out"):
+        b, p = f"bps_{side}", f"pps_{side}"
+        d[f"bytes_per_pkt_{side}_now"] = div(now.get(b, 0.0), now.get(p, 0.0))
+        d[f"bytes_per_pkt_{side}_normal"] = div(base.get(b, 0.0), base.get(p, 0.0))
+        d[f"pkts_ratio_{side}"] = div(now.get(p, 0.0), base.get(p, 0.0))
+        d[f"bytes_ratio_{side}"] = div(now.get(b, 0.0), base.get(b, 0.0))
+    rin = max(d["pkts_ratio_in"] or 0, d["bytes_ratio_in"] or 0)
+    rout = max(d["pkts_ratio_out"] or 0, d["bytes_ratio_out"] or 0)
+    d["direction"] = "входящий" if rin > 1.5 * rout else "исходящий" if rout > 1.5 * rin else "в обе стороны"
+    d["errors_or_drops_per_s"] = round(sum(now.get(f, 0.0) for f in FEATURES[4:]), 1)
+    return {**ctx, "derived": d}
+
+
 def make_prompt(ctx: dict) -> str:
-    return "Данные алерта (JSON):\n" + json.dumps(ctx, ensure_ascii=False, indent=1)
+    return "Данные алерта (JSON):\n" + json.dumps(add_derived(ctx), ensure_ascii=False, indent=1)
 
 
 def ask_ollama(prompt: str, model: str | None = None, timeout: float = 300.0) -> tuple[str, float]:
