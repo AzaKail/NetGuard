@@ -6,7 +6,7 @@ Nothing leaves the local network: Ollama runs on the admin PC.
 
 Settings (environment variables):
   NETGUARD_OLLAMA_URL    default http://127.0.0.1:11434
-  NETGUARD_OLLAMA_MODEL  default qwen2.5:3b   (also: llama3.2:3b, gemma2:2b, qwen2.5:7b)
+  NETGUARD_OLLAMA_MODEL  default gemma4:e2b   (also: qwen3:8b, qwen2.5:3b)
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import urllib.request
 from statistics import mean, pstdev
 
 OLLAMA_URL = os.getenv("NETGUARD_OLLAMA_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL = os.getenv("NETGUARD_OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_MODEL = os.getenv("NETGUARD_OLLAMA_MODEL", "gemma4:e2b")
 
 FEATURES = ["bps_in", "bps_out", "pps_in", "pps_out", "err_in", "err_out", "drop_in", "drop_out"]
 

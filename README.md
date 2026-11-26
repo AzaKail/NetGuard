@@ -154,8 +154,8 @@ agent.exe --server http://192.168.1.10:8000 --interval 5
 Детекцию делает Isolation Forest, а локальная языковая модель только объясняет найденный алерт по-русски. Данные не уходят из сети.
 
 ```powershell
-ollama pull qwen2.5:3b          # или llama3.2:3b, gemma2:2b
-$env:NETGUARD_OLLAMA_MODEL="qwen2.5:3b"   # необязательно, это значение по умолчанию
+ollama pull gemma4:e2b          # или qwen3:8b
+$env:NETGUARD_OLLAMA_MODEL="gemma4:e2b"   # необязательно, это значение по умолчанию
 ```
 
 В панели у каждого алерта есть кнопка «Объяснить». API: `POST /api/alerts/{id}/explain`, ответы кэшируются в таблице `alert_explanations`.
