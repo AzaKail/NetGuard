@@ -30,9 +30,9 @@ SYSTEM = (
     "обнаружил алгоритм Isolation Forest, твоя задача объяснить её. Отвечай по-русски, "
     "кратко, по шаблону:\n"
     "1. Что произошло (1-2 предложения, с конкретными числами из данных).\n"
-    "2. На что похоже: выбери из [объёмная атака/флуд, сканирование, утечка данных "
-    "(исходящий всплеск), проблема канала или драйвера (ошибки/сбросы), легитимная "
-    "нагрузка (обновление, бэкап), недостаточно данных] и объясни почему.\n"
+    "2. На что похоже: тип уже определён правилом в поле derived.rule_type. Назови именно его "
+    "первыми словами и объясни, какие числа из derived на это указывают. Если считаешь, что "
+    "правило ошиблось, сначала всё равно назови rule_type, потом коротко скажи о сомнении.\n"
     "3. Что проверить администратору (2-4 пункта).\n"
     "В блоке derived уже посчитаны производные признаки: байты на пакет сейчас и в норме, "
     "во сколько раз выросли пакеты и байты, направление всплеска. Опирайся на них: "
@@ -91,7 +91,28 @@ def add_derived(ctx: dict) -> dict:
     rout = max(d["pkts_ratio_out"] or 0, d["bytes_ratio_out"] or 0)
     d["direction"] = "входящий" if rin > 1.5 * rout else "исходящий" if rout > 1.5 * rin else "в обе стороны"
     d["errors_or_drops_per_s"] = round(sum(now.get(f, 0.0) for f in FEATURES[4:]), 1)
+    d["rule_type"] = classify(d)
     return {**ctx, "derived": d}
+
+
+def classify(d: dict) -> str:
+    """Rule-based anomaly type from the derived block; the LLM only explains it."""
+    if not d:
+        return "недостаточно данных"
+    r = lambda k: d.get(k) or 0.0
+    pin, pout, bin_, bout = r("pkts_ratio_in"), r("pkts_ratio_out"), r("bytes_ratio_in"), r("bytes_ratio_out")
+    top = max(pin, pout, bin_, bout)
+    if r("errors_or_drops_per_s") > 0.5 and top < 3:
+        return "проблема канала или драйвера (ошибки/сбросы)"
+    if top < 2:
+        return "легитимная нагрузка или недостаточно данных"
+    if bout >= 3 and bout >= 2 * max(bin_, 1.0):
+        return "утечка данных (исходящий всплеск)"
+    side_scan = any(p >= 3 and p >= 3 * max(b, 1.0) and (r(f"bytes_per_pkt_{s}_now") or 1e9) < 150
+                    for s, p, b in (("in", pin, bin_), ("out", pout, bout)))
+    if side_scan:
+        return "сканирование"
+    return "объёмная атака/флуд"
 
 
 def make_prompt(ctx: dict) -> str:

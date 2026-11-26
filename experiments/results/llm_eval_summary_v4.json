@@ -1,0 +1,28 @@
+[
+ {
+  "model": "netguard-analyst",
+  "class_acc": 0.98,
+  "rule_acc": 0.98,
+  "differs_from_rule": 0.0,
+  "fabricated": 0.03,
+  "latency_med_s": 6.4,
+  "acc_flood": 1.0,
+  "acc_scan": 0.9,
+  "acc_exfil": 1.0,
+  "acc_channel": 1.0,
+  "acc_benign": 1.0
+ },
+ {
+  "model": "gemma4:e2b",
+  "class_acc": 0.98,
+  "rule_acc": 0.98,
+  "differs_from_rule": 0.0,
+  "fabricated": 0.03,
+  "latency_med_s": 3.7,
+  "acc_flood": 1.0,
+  "acc_scan": 0.9,
+  "acc_exfil": 1.0,
+  "acc_channel": 1.0,
+  "acc_benign": 1.0
+ }
+]

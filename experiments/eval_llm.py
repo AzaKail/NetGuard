@@ -76,6 +76,16 @@ def predicted_class(text):
     return min(pos, key=pos.get) if pos else "none"
 
 
+RULE_MAP = [("флуд", "flood"), ("сканир", "scan"), ("утечк", "exfil"), ("канал", "channel"), ("легитимн", "benign"),
+            ("недостаточно", "benign")]
+
+
+def rule_class(ctx):
+    """Eval class name of the rule-based type (llm_explain.classify)."""
+    t = L.classify(L.add_derived(ctx).get("derived", {}))
+    return next((c for k, c in RULE_MAP if k in t), "none")
+
+
 def numbers(s):
     out = []
     for m in re.finditer(r"(?<![\w.])(\d+(?:[  ]\d{3})*(?:[.,]\d+)?)\s*(к|м|г)?", s, re.I):
@@ -103,29 +113,35 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+", default=[L.OLLAMA_MODEL])
     ap.add_argument("--n", type=int, default=8, help="cases per class")
+    ap.add_argument("--tag", default="", help="suffix for output file names")
     a = ap.parse_args()
     out_dir = os.path.join(os.path.dirname(__file__), "results"); os.makedirs(out_dir, exist_ok=True)
     cases = [(c, make_case(c, 1000 * i + j)) for i, c in enumerate(CLASSES) for j in range(a.n)]
+    sfx = f"_{a.tag}" if a.tag else ""
+    rules = [rule_class(ctx) for _, ctx in cases]
+    rule_acc = sum(r == c for r, (c, _) in zip(rules, cases)) / len(cases)
+    print("rule_acc", round(rule_acc, 3), flush=True)
     summary = []
     for model in a.models:
         rows = []
-        path = os.path.join(out_dir, f"llm_eval_{model.replace(':', '_').replace('/', '_')}.jsonl")
+        path = os.path.join(out_dir, f"llm_eval_{model.replace(':', '_').replace('/', '_')}{sfx}.jsonl")
         with open(path, "w", encoding="utf-8") as f:
-            for cls, ctx in cases:
+            for (cls, ctx), rule in zip(cases, rules):
                 try:
                     text, lat = L.ask_ollama(L.make_prompt(ctx), model, timeout=300)
                 except RuntimeError as e:
                     print(e); return
-                r = dict(model=model, true=cls, pred=predicted_class(text), fabricated=fabricated(text, ctx),
+                r = dict(model=model, true=cls, pred=predicted_class(text), rule=rule, fabricated=fabricated(text, ctx),
                          latency_s=lat, text=text)
                 rows.append(r); f.write(json.dumps(r, ensure_ascii=False) + "\n"); f.flush()
-                print(model, cls, "->", r["pred"], "fab" if r["fabricated"] else "", f"{lat:.1f}s", flush=True)
+                print(model, cls, "rule", rule, "->", r["pred"], "fab" if r["fabricated"] else "", f"{lat:.1f}s", flush=True)
+        diff = sum(r["pred"] != r["rule"] for r in rows) / len(rows)
         acc = sum(r["true"] == r["pred"] for r in rows) / len(rows)
         per = {c: sum(r["true"] == r["pred"] for r in rows if r["true"] == c) / a.n for c in CLASSES}
-        summary.append(dict(model=model, class_acc=round(acc, 3), fabricated=round(sum(r["fabricated"] for r in rows) / len(rows), 3),
+        summary.append(dict(model=model, class_acc=round(acc, 3), rule_acc=round(rule_acc, 3), differs_from_rule=round(diff, 3), fabricated=round(sum(r["fabricated"] for r in rows) / len(rows), 3),
                             latency_med_s=round(statistics.median(r["latency_s"] for r in rows), 1), **{f"acc_{c}": round(v, 2) for c, v in per.items()}))
     print(json.dumps(summary, ensure_ascii=False, indent=1))
-    json.dump(summary, open(os.path.join(out_dir, "llm_eval_summary.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    json.dump(summary, open(os.path.join(out_dir, f"llm_eval_summary{sfx}.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 if __name__ == "__main__":
