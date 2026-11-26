@@ -257,7 +257,7 @@
         <table>
           <thead>
             <tr>
-              <th>ID</th><th>Время</th><th>Хост</th><th>Score</th><th>Порог</th><th>Причина</th>
+              <th>ID</th><th>Время</th><th>Хост</th><th>Score</th><th>Порог</th><th>Причина</th><th>ИИ-разбор</th>
             </tr>
           </thead>
           <tbody>
@@ -269,10 +269,12 @@
               <td>{{ "%.4f"|format(a.score) }}</td>
               <td>{{ "%.4f"|format(a.threshold) }}</td>
               <td class="reason">{{ a.reason }}</td>
+              <td><button type="button" onclick="explainAlert({{ a.id }}, this)">Объяснить</button></td>
             </tr>
+            <tr id="explain-{{ a.id }}" style="display:none"><td colspan="7" class="reason" style="white-space:pre-wrap"></td></tr>
             {% endfor %}
             {% if alerts|length == 0 %}
-            <tr><td colspan="6" class="muted">Аномалий пока нет</td></tr>
+            <tr><td colspan="7" class="muted">Аномалий пока нет</td></tr>
             {% endif %}
           </tbody>
         </table>
@@ -356,6 +358,25 @@
 
     drawTrafficChart();
     window.addEventListener("resize", drawTrafficChart);
+
+    async function explainAlert(id, btn) {
+      const row = document.getElementById(`explain-${id}`);
+      const cell = row.querySelector("td");
+      row.style.display = "";
+      cell.textContent = "Локальная модель анализирует алерт...";
+      btn.disabled = true;
+      try {
+        const response = await fetch(`/api/alerts/${id}/explain`, { method: "POST" });
+        const data = await response.json();
+        cell.textContent = response.ok
+          ? `${data.text}\n\n(${data.model}, ${data.latency_s.toFixed(1)} с${data.cached ? ", из кэша" : ""})`
+          : `Ошибка: ${data.detail}`;
+      } catch (e) {
+        cell.textContent = `Ошибка: ${e}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
 
     async function simulate(kind) {
       const response = await fetch(`/api/simulate/${kind}`, { method: "POST" });

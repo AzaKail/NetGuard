@@ -1,6 +1,6 @@
 from __future__ import annotations
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Float, Integer, DateTime
+from sqlalchemy import String, Float, Integer, DateTime, Text
 from datetime import datetime
 
 class Base(DeclarativeBase):
@@ -40,3 +40,15 @@ class Alert(Base):
     score: Mapped[float] = mapped_column(Float, default=0.0)
     threshold: Mapped[float] = mapped_column(Float, default=0.0)
     reason: Mapped[str] = mapped_column(String(256), default="")
+
+class AlertExplanation(Base):
+    """LLM-generated explanation of an alert (cached, one row per alert and model)."""
+    __tablename__ = "alert_explanations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alert_id: Mapped[int] = mapped_column(Integer, index=True)
+    model: Mapped[str] = mapped_column(String(128), default="")
+    created: Mapped[datetime] = mapped_column(DateTime)
+    latency_s: Mapped[float] = mapped_column(Float, default=0.0)
+    prompt: Mapped[str] = mapped_column(Text, default="")
+    text: Mapped[str] = mapped_column(Text, default="")

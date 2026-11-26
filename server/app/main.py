@@ -16,7 +16,8 @@ from sqlalchemy import select, desc, func, distinct
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal, engine
-from .models import Base, Metric, Alert
+from .models import Base, Metric, Alert, AlertExplanation
+from . import llm_explain
 from .detector import Detector, to_feature_vector
 
 Base.metadata.create_all(bind=engine)
@@ -220,6 +221,46 @@ def api_alerts(limit: int = 20, db: Session = Depends(get_db)):
         }
         for r in rows
     ]
+
+
+@app.post("/api/alerts/{alert_id}/explain")
+def api_explain_alert(alert_id: int, refresh: bool = False, model: Optional[str] = None,
+                      db: Session = Depends(get_db)):
+    """Explain an alert with the local LLM (Ollama). Cached per alert and model."""
+    alert = db.get(Alert, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    model = model or llm_explain.OLLAMA_MODEL
+    cached = db.execute(
+        select(AlertExplanation)
+        .where(AlertExplanation.alert_id == alert_id, AlertExplanation.model == model)
+        .order_by(desc(AlertExplanation.id))
+    ).scalars().first()
+    if cached and not refresh:
+        return {"alert_id": alert_id, "model": model, "text": cached.text,
+                "latency_s": cached.latency_s, "cached": True}
+
+    # 30 points around the alert and 300 points of history of the same host
+    before = db.execute(
+        select(Metric).where(Metric.host == alert.host, Metric.ts <= alert.ts)
+        .order_by(desc(Metric.ts)).limit(330)
+    ).scalars().all()
+    after = db.execute(
+        select(Metric).where(Metric.host == alert.host, Metric.ts > alert.ts)
+        .order_by(Metric.ts).limit(10)
+    ).scalars().all()
+    window = list(reversed(before[:20])) + list(after)
+    baseline = [m for m in before[20:] if not m.is_anomaly]
+    ctx = llm_explain.build_context(alert, window, baseline)
+    prompt = llm_explain.make_prompt(ctx)
+    try:
+        text, latency = llm_explain.ask_ollama(prompt, model)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    db.add(AlertExplanation(alert_id=alert_id, model=model, created=datetime.now(timezone.utc),
+                            latency_s=latency, prompt=prompt, text=text))
+    db.commit()
+    return {"alert_id": alert_id, "model": model, "text": text, "latency_s": latency, "cached": False}
 
 
 @app.get("/api/hosts")
