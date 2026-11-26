@@ -154,9 +154,12 @@ agent.exe --server http://192.168.1.10:8000 --interval 5
 Детекцию делает Isolation Forest, а локальная языковая модель только объясняет найденный алерт по-русски. Данные не уходят из сети.
 
 ```powershell
-ollama pull gemma4:e2b          # или qwen3:8b
-$env:NETGUARD_OLLAMA_MODEL="gemma4:e2b"   # необязательно, это значение по умолчанию
+ollama pull gemma4:e2b                              # базовая модель
+ollama create netguard-analyst -f ollama/Modelfile  # своя модель NetGuard (по умолчанию)
+$env:NETGUARD_OLLAMA_MODEL="netguard-analyst"       # необязательно; можно gemma4:e2b или qwen3:8b
 ```
+
+`netguard-analyst` это gemma4:e2b с системным промптом NetGuard и примерами разборов алертов (`ollama/Modelfile`). Чтобы «доучить» её, добавьте новые пары `MESSAGE user`/`MESSAGE assistant` в Modelfile и пересоздайте модель той же командой `ollama create`. Качество объяснений проверяется скриптом `experiments/eval_llm.py`.
 
 В панели у каждого алерта есть кнопка «Объяснить». API: `POST /api/alerts/{id}/explain`, ответы кэшируются в таблице `alert_explanations`.
 

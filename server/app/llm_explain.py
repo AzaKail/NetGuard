@@ -6,7 +6,9 @@ Nothing leaves the local network: Ollama runs on the admin PC.
 
 Settings (environment variables):
   NETGUARD_OLLAMA_URL    default http://127.0.0.1:11434
-  NETGUARD_OLLAMA_MODEL  default gemma4:e2b   (also: qwen3:8b, qwen2.5:3b)
+  NETGUARD_OLLAMA_MODEL  default netguard-analyst (also: gemma4:e2b, qwen3:8b)
+  netguard-analyst = gemma4:e2b + NetGuard prompt + examples; build it with
+  ollama create netguard-analyst -f ollama/Modelfile
 """
 from __future__ import annotations
 
@@ -18,7 +20,7 @@ import urllib.request
 from statistics import mean, pstdev
 
 OLLAMA_URL = os.getenv("NETGUARD_OLLAMA_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL = os.getenv("NETGUARD_OLLAMA_MODEL", "gemma4:e2b")
+OLLAMA_MODEL = os.getenv("NETGUARD_OLLAMA_MODEL", "netguard-analyst")
 
 FEATURES = ["bps_in", "bps_out", "pps_in", "pps_out", "err_in", "err_out", "drop_in", "drop_out"]
 
@@ -67,11 +69,12 @@ def make_prompt(ctx: dict) -> str:
     return "Данные алерта (JSON):\n" + json.dumps(ctx, ensure_ascii=False, indent=1)
 
 
-def ask_ollama(prompt: str, model: str | None = None, timeout: float = 120.0) -> tuple[str, float]:
+def ask_ollama(prompt: str, model: str | None = None, timeout: float = 300.0) -> tuple[str, float]:
     model = model or OLLAMA_MODEL
     body = json.dumps({
         "model": model,
         "stream": False,
+        "think": False,  # thinking models (gemma4, qwen3) otherwise spend minutes reasoning
         "options": {"temperature": 0.2},
         "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
     }).encode()
